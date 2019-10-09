@@ -1,0 +1,20 @@
+Where to start?
+
+Clone the code, type "make", and see what happens. I cannot tell you the code's dependencies because I didn't record them, but they exist such as a requisite compiler and i2c libraries. There are other informational files in the "doc" directory but the source is the ultimate information repository. 
+
+FAQ
+
+Why is my attic so warm in October?
+Just below part of my attic is my data center whose warm air is vented into the attic. I needed to cool my data center but I also wanted to force the hot air out of the attic but I cannot directly install outside venting due to association rules. Therefore, I had to work with what I got.
+
+Why am I underutilizing the Enviro pHat?
+I thought the pHAT was dead due to previous abuse and, so, I was surprised the A/D converter still worked. I didn't trust the temperature sensor and I didn't need the pHAT's other sensors - what is the motion sensor going to do for me when the sensor array is static? Note, I plan to write c++ code for the Environ pHAT+ for another project.
+
+What's with revision history embedded in the code?
+Simple, I use RCS and configured the files to include revision information. I personally like revision comments embedded in files because the information is right there - in front of me, rather than to issue additional commands to see them. Also, I don't yet have a git server running (another story).
+
+Munin graphs Fahrenheit?
+Yes. I'm American. 
+
+Can I believe the readings?
+Got me. I don't have the equipment to calibrate the sensors.
