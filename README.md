@@ -7,3 +7,5 @@ The purpose of this project was to install an array of sensors in my attic and g
 3) Explore some C++17 features, and
 4) To have fun.
 I am aware that I could have written the code in Python or used Circuit Python, which may make sense and I'm not disparaging those tools, but they were contrary to my goals. This code isn't as compact or efficient as it could be, and I don't care - that wasn't one of my goals. There is a fair amount of logging and conditional compilation which can be removed by undefining compile-time variables in the Makefile. Eliminating those variable definitions and compiling with the -Os optimization flag will significantly reduce the code's size. Be aware this code is multi-threaded, too.
+
+This code was developed on a Raspberry PI 3B running Debian Buster. The compiler was Raspbian's native compiler GNU C++ 8.3.0 however I also installed and tested the code against clang+llvm-9.0.0.
