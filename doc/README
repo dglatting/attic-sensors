@@ -17,4 +17,4 @@ Munin graphs Fahrenheit?
 Yes. I'm American. 
 
 Can I believe the readings?
-Got me. I don't have the equipment to check/calibrate the sensor readings.
+Got me. I don't have the equipment to check/calibrate the sensor readings. I read on the ErrorNet that having a sensor's heater constant-on results in inaccuracy. I don't know if that is true. My sensor heaters are constant-on due to the PCB (SparkFun) that I used to mount each sensor.
