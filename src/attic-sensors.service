@@ -22,6 +22,9 @@
 #
 #
 # $Log: attic-sensors.service,v $
+# Revision 1.3  2019/10/12 06:51:22  root
+# Moved the PID file to new-style storage.
+#
 # Revision 1.2  2019/10/08 08:21:27  root
 # Initial debug.
 #
@@ -37,21 +40,21 @@ AssertPathExists=/usr/local/sbin
 
 [Service]
 Type=forking
-PIDFile=/var/run/sensors.pid
+PIDFile=/run/sensors.pid
 ExecStart=/usr/local/sbin/attic-sensors
-ExecStop=echo       'cnt=0;              \
-while [ -e /var/run/sensors.pid ]; do    \
-                                         \
-  kill -HUP `cat /var/run/sensors.pid`;  \
-  sleep 1;                               \
-                                         \
-  cnt=`expr $${cnt} + 1`;                \
-  if [ $${cnt} -gt 7 ]; then             \
-    break;                               \
-  fi                                     \
-                                         \
-done;                                    \
-rm /var/run/sensors.pid /var/run/sensors;\
+ExecStop=echo 'cnt=0;                \
+while [ -e /run/sensors.pid ]; do    \
+                                     \
+  kill -HUP `cat /run/sensors.pid`;  \
+  sleep 1;                           \
+                                     \
+  cnt=`expr $${cnt} + 1`;            \
+  if [ $${cnt} -gt 7 ]; then         \
+    break;                           \
+  fi                                 \
+                                     \
+done;                                \
+rm /run/sensors.pid /var/run/sensors;\
 ' | /bin/bash
 TimeoutStopSec=60
 

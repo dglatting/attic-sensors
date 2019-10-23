@@ -54,6 +54,22 @@
  *
  *
  * $Log: main.cc,v $
+ * Revision 1.35  2019/10/23 03:54:00  root
+ * First pass at integrating other project changes.
+ *
+ * Revision 1.34  2019/10/15 22:38:05  root
+ * Integrated new "templates" header from another project.
+ *
+ * Revision 1.33  2019/10/12 21:59:59  root
+ * *** empty log message ***
+ *
+ * Revision 1.32  2019/10/12 07:06:15  root
+ * Added code to adjust sensor values of full-scale against Vdd's
+ * actual value.
+ *
+ * Revision 1.31  2019/10/12 06:51:22  root
+ * Moved the PID file to new-style storage.
+ *
  * Revision 1.30  2019/10/07 03:42:36  root
  * Shortened the function quoteStr().
  *
@@ -61,7 +77,7 @@
  * Mostly textual clean-up but some minor code changes.
  *
  * Revision 1.28  2019/10/06 08:36:34  root
- * The Munin thread now behaves for exit.
+ * The Munin thread now behaves on exit.
  *
  * Revision 1.27  2019/10/06 06:38:56  root
  * Added output of the Vcc A/D pin and simplified some code.
@@ -196,10 +212,11 @@ extern "C" {
 #include "microdotphat.h"
 #include "log.h"
 #include "opts.h"
-#include "dev.h"
+#include "i2c.h"
+#include "templates.h"
 
 
-static const std::string main_ident = "$Id: main.cc,v 1.30 2019/10/07 03:42:36 root Exp root $";
+static const std::string main_ident = "$Id: main.cc,v 1.35 2019/10/23 03:54:00 root Exp root $";
 
 
 // Since this code is multi-threaded the i2c bus must locked for each
@@ -211,7 +228,7 @@ std::mutex i2c_bus;
 // Where the PID file is cached.
 
 static const std::string pid_file {
-  "/var/run/sensors.pid"
+  "/run/sensors.pid"
 };
 
 
@@ -248,12 +265,12 @@ std::condition_variable MQcv;
 // ad2, input 2 - GND
 // ad2, input 3 - Vdd
 
-i2c::ads1015 ad1, ad2( 0x48 );
+ads1015 ad1, ad2( 0x48 );
 
 
 // This is the temperature/humidity sensor.
 
-i2c::si7021 th;
+si7021 th;
 
 
 // Do this when the program exists. It's just a little house
@@ -375,7 +392,7 @@ MQx_update_sensor_thread( void ) {
       < std::string,         // Printable name
 	float,               // Accumulator
 	std::queue< float >, // Samples queue
-	i2c::ads1015::CREG,  // Which register to find the sample
+	ads1015::CREG,       // Which register to find the sample
 	int                  // Which A/D (1 or 2)
 	>
       > sensor_map;
@@ -390,19 +407,19 @@ MQx_update_sensor_thread( void ) {
   // Initialize the sensor map.
   
   sensor_map[ QUE::MQ2 ] = { "MQ2", 0.0, std::queue< float >(),
-                             i2c::ads1015::CREG::CHAN0, 1 };
+                             ads1015::CREG::CHAN0, 1 };
   sensor_map[ QUE::MQ3 ] = { "MQ3", 0.0, std::queue< float >(),
-			     i2c::ads1015::CREG::CHAN1, 1 };
+			     ads1015::CREG::CHAN1, 1 };
   sensor_map[ QUE::MQ4 ] = { "MQ4", 0.0, std::queue< float >(),
-			     i2c::ads1015::CREG::CHAN2, 1 };
+			     ads1015::CREG::CHAN2, 1 };
   sensor_map[ QUE::MQ6 ] = { "MQ6", 0.0, std::queue< float >(),
-			     i2c::ads1015::CREG::CHAN3, 1 };
+			     ads1015::CREG::CHAN3, 1 };
   sensor_map[ QUE::MQ7 ] = { "MQ7", 0.0, std::queue< float >(),
-			     i2c::ads1015::CREG::CHAN0, 2 };
+			     ads1015::CREG::CHAN0, 2 };
   sensor_map[ QUE::MQ9 ] = { "MQ9", 0.0, std::queue< float >(),
-			     i2c::ads1015::CREG::CHAN1, 2 };
+			     ads1015::CREG::CHAN1, 2 };
   sensor_map[ QUE::Vdd ] = { "Vdd", 0.0, std::queue< float >(),
-                             i2c::ads1015::CREG::CHAN3, 2 };
+                             ads1015::CREG::CHAN3, 2 };
 
   // Run the loop every second.
   
@@ -456,8 +473,19 @@ MQx_update_sensor_thread( void ) {
 
 	// Calculate the voltage on the A/D input.
 
-	const float volts = ( SENSOR_ACC( m ) / float( SMOOTH_LEN ));
+	float volts = ( SENSOR_ACC( m ) / float( SMOOTH_LEN ));
 
+	// If Vdd is greater than zero then compensate for full scale
+	// voltage against power supply drop.
+	
+	if( Vdd.load() > 0.0 ) {
+
+	  constexpr float expected_full_scale = 5.0;
+
+	  volts *= ( expected_full_scale / Vdd.load());
+
+	}	  
+	  
 	// Now, update the global values.
 	
 	if( id == QUE::MQ2 ) {
@@ -540,7 +568,10 @@ MQx_update_sensor_thread( void ) {
 		  } else
 		    if( id == QUE::Vdd ) {
 
-		      Vdd.store( volts );
+		      // For Vdd, I don't want to record the adjusted
+		      // voltage rather the *unadjusted* voltage.
+		      
+		      Vdd.store( SENSOR_ACC( m ) / float( SMOOTH_LEN ));
 		      
 		    } else
 		      _LOG_ABORT(( "Impossible state" ));
@@ -827,10 +858,10 @@ munin_service_thread( void ) {
 
     tAddr1.sun_family = AF_UNIX;
     
-    if(( err = bind( *sock, (struct sockaddr *)&tAddr1, sizeof( tAddr1 ))))
+    if(( err = ::bind( *sock, (struct sockaddr *)&tAddr1, sizeof( tAddr1 ))))
       _LOG_ERR(( "Unable to bind() to Munin pipe, err=", err, errno2str()));
     else
-      if(( err = listen( *sock, LISTENQ )))
+      if(( err = ::listen( *sock, LISTENQ )))
 	_LOG_ERR(( "Unable to start listen(), err=", err, errno2str()));
       else
 	if(( err = ::chmod( pipe_path.c_str(), 0777 )))
@@ -913,6 +944,9 @@ main( int argc, char** argv ) {
   extern const std::vector< std::string >
     ads1015_ident, is31fl3730_ident, si7021_ident, i2c_ident,
     log_ident, microdotphat_ident, opts_ident, util_ident;
+  const std::vector< std::string > headers_ident {
+    _TEMPLATES_H_ID
+  };
 
   std::cout << main_ident << std::endl;
   for( const auto& i : { ads1015_ident, is31fl3730_ident, si7021_ident,
@@ -920,6 +954,8 @@ main( int argc, char** argv ) {
 			  opts_ident, util_ident })
     for( const std::string& j : i )
       std::cout <<  j << std::endl;
+  for( const auto& i : headers_ident )
+    std::cout <<  i << std::endl;
 
   // Parse the options.
   
@@ -929,15 +965,15 @@ main( int argc, char** argv ) {
   // Initialize and start the A/D converters connected to the MQ
   // sensors.
   
-  ad1.gain( i2c::ads1015::PGA_GAIN::FS_6144 );
-  ad1.mode( i2c::ads1015::MODE::CONTINUOUS );
-  ad1.rate( i2c::ads1015::SAMPLE_RATE::SR_3300 );
-  ad1.os( i2c::ads1015::OS::BEGIN );
+  ad1.gain( ads1015::PGA_GAIN::FS_6144 );
+  ad1.mode( ads1015::MODE::CONTINUOUS );
+  ad1.rate( ads1015::SAMPLE_RATE::SR_3300 );
+  ad1.os( ads1015::OS::BEGIN );
     
-  ad2.gain( i2c::ads1015::PGA_GAIN::FS_6144 );
-  ad2.mode( i2c::ads1015::MODE::CONTINUOUS );
-  ad2.rate( i2c::ads1015::SAMPLE_RATE::SR_3300 );
-  ad2.os( i2c::ads1015::OS::BEGIN );
+  ad2.gain( ads1015::PGA_GAIN::FS_6144 );
+  ad2.mode( ads1015::MODE::CONTINUOUS );
+  ad2.rate( ads1015::SAMPLE_RATE::SR_3300 );
+  ad2.os( ads1015::OS::BEGIN );
 
   // Start the temperature and humidity sensor. The heater adds about
   // three degress to the sense, so turn it off.

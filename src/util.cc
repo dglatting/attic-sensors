@@ -30,6 +30,9 @@
  *
  *
  * $Log: util.cc,v $
+ * Revision 1.41  2019/10/19 01:07:19  root
+ * Fixed minor formatting bug.
+ *
  * Revision 1.40  2019/10/07 03:42:36  root
  * Shortened the function quoteStr().
  *
@@ -209,7 +212,7 @@ extern "C" {
 
 extern const
 std::vector< std::string > util_ident {
-  _UTIL_H_ID, "$Id: util.cc,v 1.40 2019/10/07 03:42:36 root Exp root $"
+  _UTIL_H_ID, "$Id: util.cc,v 1.41 2019/10/19 01:07:19 root Exp $"
 };
 
 
@@ -261,7 +264,7 @@ std::string _hex( const T& Arg ) {
   std::stringstream s;
 
   s << std::hex << std::setfill('0')
-    << std::setw( sizeof( T ))
+    << std::setw( sizeof( T ) * 2)
     << int( Arg );
 
   return s.str();

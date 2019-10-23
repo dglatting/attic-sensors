@@ -30,6 +30,9 @@
  *
  *
  * $Log: log.cc,v $
+ * Revision 1.18  2019/10/19 01:25:00  root
+ * Fixed a clang complaint.
+ *
  * Revision 1.17  2019/10/07 03:42:36  root
  * Shortened the function quoteStr().
  *
@@ -117,7 +120,7 @@ extern "C" {
 
 extern const
 std::vector< std::string > log_ident {
-  _LOG_H_ID, "$Id: log.cc,v 1.17 2019/10/07 03:42:36 root Exp root $"
+  _LOG_H_ID, "$Id: log.cc,v 1.18 2019/10/19 01:25:00 root Exp $"
 };
 
 
@@ -169,7 +172,7 @@ _log( const char* file, const char* func, int line, int lvl,
 
 	// Output.
 	
-	::syslog( l, ss.str().c_str());
+	::syslog( l, "%s", ss.str().c_str());
 	
       } else {
 

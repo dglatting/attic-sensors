@@ -34,6 +34,15 @@
  *
  *
  * $Log: ads1015.h,v $
+ * Revision 1.24  2019/10/19 04:10:44  root
+ * Minor text change.
+ *
+ * Revision 1.23  2019/10/19 01:03:11  root
+ * First perversion to new code structure.
+ *
+ * Revision 1.22  2019/10/15 22:38:05  root
+ * Integrated new "templates" header from another project.
+ *
  * Revision 1.21  2019/10/07 03:15:14  root
  * Minor const changes.
  *
@@ -136,324 +145,427 @@ extern "C" {
 #include <tuple>
 #include <utility>
 
-#include "dev.h"
+#include "i2c.h"
 #include "log.h"
 #include "util.h"
 
 
-#define _ADS1015_H_ID "$Id: ads1015.h,v 1.21 2019/10/07 03:15:14 root Exp $"
+#define _ADS1015_H_ID "$Id: ads1015.h,v 1.24 2019/10/19 04:10:44 root Exp $"
 
 
-namespace i2c {
+class ads1015 : public i2c {
 
-  class ads1015 : public Dev {
+private:
 
-  public:
+  // Default configuration:
+  //                        Begin conversion(s),
+  //   MUX:                 AINp=AIN0, AINn=AIN1
+  //   PGA Gain:            FS_2048
+  //   Operational Mode:    Single shot/Power down
+  //   Sample Rate:         1600 SPS
+  //   Comparator mode:     Traditional
+  //   Comparator polarity: Active low
+  //   Latching comparator: non-latching
+  //   Comparator queue:    Disable
+  
+  inline static constexpr uint16_t default_config = 0x8583;
+  
+  // Default i2c address of the converter.
+  
+  inline static constexpr int16_t default_addr = 0x49;
+  
+  // The addresses of the registers.
+  
+  inline static constexpr uint8_t       REG_CONV = uint8_t( 0b00 ),
+                                         REG_CFG = uint8_t( 0b01 ),
+                                   REG_LO_THRESH = uint8_t( 0b10 ),
+                                   REG_HI_THRESH = uint8_t( 0b11 );
 
-    // The following definitions are from the Texas Instruments
-    // ADS1013/4/5 document "Ultra-Small, Low-Power, 12-bit
-    // Analog-to-Digital Converter with Internal Reference."
-    // SBAS473C - MAY 2009 - REVISED OCTOBER 2009
-    //
-    // "_MASK" is simply a bit masking entry and should be ignored.
+  // Mirrored configuration register.
+  
+  uint16_t myConfigReg;
+  
+  // Check certain data structures for consistency and assert() if
+  // something doesn't make sense.
+  
+  void _check( void ) noexcept;
+  
+  // Write to the configuration register and read from it.
+  
+  int32_t _write_cfg( void ) const noexcept;
+  int32_t _read_cfg(  void ) const noexcept;
+  
+  // This template is used in the simple functions that read the
+  // configuration register and return a bit sequence mapped to an
+  // enumerated type.
+  
+  template< typename E >
+  inline
+  E _reg_read_map_cfg( const std::map< E, uint16_t>& m ) const noexcept {
     
-    enum class OS          { _NONE, BEGIN, CONVERSION_READY, _MASK };
-    enum class AINp        { _NONE, AIN0, AIN1, AIN2, AIN3, _MASK };
-    enum class AINn        { _NONE, AIN1, AIN3, GND, _MASK };
-    enum class PGA_GAIN    { _NONE, FS_6144, FS_4096, FS_2048,
-			     FS_1024, FS_512, FS_256, _MASK };
-    enum class MODE        { _NONE, CONTINUOUS, SINGLE_SHOT, _MASK };
-    enum class SAMPLE_RATE { _NONE, SR_128, SR_250, SR_490, SR_920,
-                             SR_1600, SR_2400, SR_3300, _MASK };
-    enum class COMP_MODE   { _NONE, TRADITIONAL, WINDOW, _MASK };
-    enum class COMP_POL    { _NONE, ACTIVE_LOW, ACTIVE_HIGH, _MASK };
-    enum class COMP_LAT    { _NONE, NON_LATCHING, LATCHING, _MASK };
-    enum class COMP_QUE    { _NONE, ONE, TWO, FOUR, DISABLE, _MASK };
-
-  private:
-
-    // These data structures are to map the previous enums to
-    // configuration register bits.
-    //
-    // Ok, what is going on here? Well, it's a little nuts but it is
-    // also typed. Rather that parade bits around, strong typing
-    // through enums is used. Yes, bits are simple and produce tighter
-    // code and this code is rather expressive. However, this code is
-    // more strongly typed. You lose something, you gain something.
-    //
-    // Shrug.
+    E       e_type = E::_NONE;
+    int32_t reg    = _read_cfg();
     
-    static const std::map< OS,                 uint16_t > OS_MAP;
-    static const std::map< std::tuple< AINp,
-				       AINn >, uint16_t > MUX_MAP;
-    static const std::map< PGA_GAIN,           uint16_t > PGA_GAIN_MAP;
-    static const std::map< MODE,               uint16_t > MODE_MAP;
-    static const std::map< SAMPLE_RATE,        uint16_t > SAMPLE_RATE_MAP;
-    static const std::map< COMP_MODE,          uint16_t > COMP_MODE_MAP;
-    static const std::map< COMP_POL,           uint16_t > COMP_POL_MAP;
-    static const std::map< COMP_LAT,           uint16_t > COMP_LAT_MAP;
-    static const std::map< COMP_QUE,           uint16_t > COMP_QUE_MAP;
-
-    // Default configuration:
-    //                        Begin conversion(s),
-    //   MUX:                 AINp=AIN0, AINn=AIN1
-    //   PGA Gain:            FS_2048
-    //   Operational Mode:    Single shot/Power down
-    //   Sample Rate:         1600 SPS
-    //   Comparator mode:     Traditional
-    //   Comparator polarity: Active low
-    //   Latching comparator: non-latching
-    //   Comparator queue:    Disable
-    
-    inline static constexpr uint16_t default_config = 0x8583;
-
-    // Default i2c address of the converter.
-    
-    inline static constexpr int16_t default_addr = 0x49;
-
-    // The addresses of the registers.
-
-    inline static constexpr uint8_t       REG_CONV = uint8_t( 0b00 ),
-                                           REG_CFG = uint8_t( 0b01 ),
-                                     REG_LO_THRESH = uint8_t( 0b10 ),
-                                     REG_HI_THRESH = uint8_t( 0b11 );
-
-    // Mirrored configuration register.
-    
-    uint16_t myConfigReg;
-    
-    // Check certain data structures for consistency and assert() if
-    // something doesn't make sense.
-    
-    void _check( void ) noexcept;
-
-    // Write to the configuration register and read from it.
-    
-    int32_t _write_cfg( void ) const noexcept;
-    int32_t _read_cfg(  void ) const noexcept;
-
-    // Set/get the multiplexer. The multiplexer is used to select
-    // which A/D value is read.
-
-    const std::tuple< AINp, AINn> _mux( void ) const noexcept;
-    const std::tuple< AINp, AINn> _mux( AINp p, AINn n );
-
-    // This template is used in the simple functions that read the
-    // configuration register and return a bit sequence mapped to an
-    // enumerated type.
-    
-    template< typename E >
-    inline
-    E _reg_read_map_cfg( const std::map< E, uint16_t>& m ) const noexcept {
+    if( reg < 0 ) {
       
-      E       e_type = E::_NONE;
-      int32_t reg    = _read_cfg();
+      _LOG_WARN(( _id( "Failed to read config register." )));
       
-      if( reg < 0 ) {
-	
-	_LOG_WARN(( _id( "Failed to read config register." )));
-	
-      } else {
-	
-	const uint16_t mask = m.at( E::_MASK );
-
-	for( const auto& i : m )
-	  if(( i.first != E::_NONE ) && ( i.first != E::_MASK ))
-	    if(( reg & mask ) == i.second ) {
-	      e_type = i.first;
-	      break;
-	    }
-
-	// Note: A E-type of none is always possible for bits
-	//       indicating a process, such as whether a conversion
-	//       is complete or not. In other cases, bits are fairly
-	//       static where "none" is not a possibility. Therefore,
-	//       this point of the code is slightly flawed because it
-	//       doesn't know the difference between static and
-	//       dynamic bits and therefore cannot test whether "none"
-	//       is an impossibility.
-	
-      }
-      
-      return e_type;
-    }
-
-    // Similar to the last template function, this template is used as
-    // the bulk of the simple functions that write an enumerated type
-    // mapped to a bit sequence to the configuration register.
-    
-    template< typename E >
-    inline
-    int32_t _reg_write_map_cfg( const E& e, const std::map< E, uint16_t>& m ) {
-
-      myConfigReg &= ~m.at( E::_MASK );
-
-      for( const auto& i : m )
-	if(( i.first != E::_NONE ) && ( i.first != E::_MASK ))
-	    if( e == i.first ) {
-	    myConfigReg |= i.second;
-	    break;
-	  }
-      int32_t rVal = _write_cfg();
-
-      if( rVal < 0 )
-	_LOG_WARN(( _id( "Failed write to configuration register" ),
-		    ", err=", rVal, errno2str( errno )));
-      
-      return rVal;
-    }
-
-    // The following templates are used in the _check() routine and
-    // exist only when the code is compiled for debugging.
-
-    template< typename E >
-    inline
-    void
-    _check_masking( const std::map< E, uint16_t >& m ) {
-#ifdef _DPG_DEBUG
-
-      // The map size MUST always be greater than zero (i.e., there
-      // MUST be something to map).
-      
-      assert( m.size());
-
-      // Test:
-      // 1, If I mask the bits against the mask's complement then
-      //    there shouldn't be any extraneous bits set.
-      // 2, If I mask the bits against the mask then the result MUST
-      //    be the bits.
+    } else {
       
       const uint16_t mask = m.at( E::_MASK );
+      
       for( const auto& i : m )
-        if(( i.first != E::_NONE ) && ( i.first != E::_MASK )) {
-          assert(( i.second & ~mask ) == 0 );
-          assert(( i.second & mask ) == i.second );
-        }
-
-#endif
+	if(( i.first != E::_NONE ) && ( i.first != E::_MASK ))
+	  if(( reg & mask ) == i.second ) {
+	    e_type = i.first;
+	    break;
+	  }
+      
+      // Note: A E-type of none is always possible for bits
+      //       indicating a process, such as whether a conversion
+      //       is complete or not. In other cases, bits are fairly
+      //       static where "none" is not a possibility. Therefore,
+      //       this point of the code is slightly flawed because it
+      //       doesn't know the difference between static and
+      //       dynamic bits and therefore cannot test whether "none"
+      //       is an impossibility.
+      
     }
-
-    template< typename A, typename B >
-    inline
-    void _check_bit_overlap( const A& a, const B& b ) const {
-#ifdef _DPG_DEBUG
-
-      // Test:
-      // 1, Two different function bit maps exist in the same register
-      //    but the bits in each map MUST not overlap.
-
-      for( auto& i : a )
-        for( auto& j : b )
-          assert(( i.second & j.second ) == 0 );
-#endif
-    }
-
-    // This routine performs initialization of an objects and its
-    // device in the constructor.
     
-    virtual bool _doInit( void );
-
-  public:
-
-             ads1015( void );
-    virtual ~ads1015( void );
-
-    ads1015(                         const int16_t addr );
-    ads1015( const std::string& bus, const int16_t addr );
-
-    ads1015( const ads1015&  ad ) =  delete;
-    ads1015(       ads1015&  ad );
-    ads1015( const ads1015&& ad ) = delete;
-    ads1015(       ads1015&& ad );
-
-    ads1015& operator=( const ads1015&  ad ) = delete;
-    ads1015& operator=(       ads1015&  ad );
-    ads1015& operator=( const ads1015&& ad ) = delete;
-    ads1015& operator=(       ads1015&& ad );
-
-    bool operator==( const ads1015& d ) const noexcept;
-    bool operator!=( const ads1015& d ) const noexcept;
-
-    int reset( void );
+    return e_type;
+  }
+  
+  // Similar to the last template function, this template is used as
+  // the bulk of the simple functions that write an enumerated type
+  // mapped to a bit sequence to the configuration register.
     
-    // Set/get the operational status.  Only the BEGIN bit can be set
-    // and only the READY bit can be read.
-
-    const OS os( void ) const noexcept;
-    const OS os( const OS o );
-
-    // Set/get the programable gain amplifier.
+  template< typename E >
+  inline
+  int32_t _reg_write_map_cfg( const E& e, const std::map< E, uint16_t>& m ) {
     
-    const PGA_GAIN gain( void ) const noexcept;
-    const PGA_GAIN gain( const PGA_GAIN g );
-
-    const int i_gain( void ) const noexcept; // Alternative to using an enum
-    const int i_gain( const int g );
+    myConfigReg &= ~m.at( E::_MASK );
     
-    // Set/get the operating mode (continuous or single-shot).
+    for( const auto& i : m )
+      if(( i.first != E::_NONE ) && ( i.first != E::_MASK ))
+	if( e == i.first ) {
+	  myConfigReg |= i.second;
+	  break;
+	}
+    int32_t rVal = _write_cfg();
     
-    const MODE mode( void ) const noexcept;
-    const MODE mode( const MODE m );
-
-    // Set/get the sample rate.
+    if( rVal < 0 )
+      _LOG_WARN(( _id( "Failed write to configuration register" ),
+		  ", err=", rVal, errno2str( errno )));
     
-    const SAMPLE_RATE rate( void ) const noexcept;
-    const SAMPLE_RATE rate( const SAMPLE_RATE r );
+    return rVal;
+  }
+  
+  // This routine performs initialization of an objects and its device
+  // in the constructor.
+  
+  bool _doInit( void ) noexcept;
+  
+public:
+  
+           ads1015( void );
+  virtual ~ads1015( void );
 
-    const int i_rate( void ) const noexcept; // Alternative to using an enum
-    const int i_rate( const int r );
+  ads1015(                         const int16_t addr );
+  ads1015( const std::string& bus, const int16_t addr );
+  
+  ads1015( const ads1015&  ad ) =  delete;
+  ads1015(       ads1015&  ad );
+  ads1015( const ads1015&& ad ) = delete;
+  ads1015(       ads1015&& ad );
+  
+  ads1015& operator=( const ads1015&  ad ) = delete;
+  ads1015& operator=(       ads1015&  ad );
+  ads1015& operator=( const ads1015&& ad ) = delete;
+  ads1015& operator=(       ads1015&& ad );
+  
+  bool operator==( const ads1015& d ) const noexcept;
+  bool operator!=( const ads1015& d ) const noexcept;
+  
+  int reset( void );
+  
+  // Set/get the operational status.  Only the BEGIN bit can be set
+  // and only the READY bit can be read.
 
-    // Set/get the comparator mode, polarity, latch, and queue.
+  enum class OS : int { BEGIN = 1, CONVERSION_READY };
 
-    const COMP_MODE comp_mode( void ) const noexcept;
-    const COMP_MODE comp_mode( const COMP_MODE m );
+  const OS os( void ) const noexcept;
+  const OS os( const OS o );
+  
+  // Set/get the programable gain amplifier.
 
-    const COMP_POL comp_pol( void ) const noexcept;
-    const COMP_POL comp_pol( const COMP_POL p );
+  enum class PGA_GAIN : int { FS_6144 = 1, FS_4096, FS_2048,
+			                   FS_1024, FS_512, FS_256 };
 
-    const COMP_LAT comp_lat( void ) const noexcept;
-    const COMP_LAT comp_lat( const COMP_LAT l );
+  const PGA_GAIN gain( void ) const noexcept;
+  const PGA_GAIN gain( const PGA_GAIN g );
+  
+  const int i_gain( void ) const noexcept; // Alternative to using an enum
+  const int i_gain( const int g );
+  
+  // Set/get the operating mode (continuous or single-shot).
 
-    const COMP_QUE comp_que( void ) const noexcept;
-    const COMP_QUE comp_que( const COMP_QUE q );
+  enum class MODE : int { CONTINUOUS = 1, SINGLE_SHOT };
 
-    // Get a signed floating point value of a conversion register. How
-    // the analog inputs are connected are unknown. Therefore, both
-    // differential and single input multiplex inputs are
-    // supported. That said, often in I/IoT the inputs are single
-    // ended.
+  const MODE mode( void ) const noexcept;
+  const MODE mode( const MODE m );
+  
+  // Set/get the sample rate.
+
+  enum class SAMPLE_RATE : int { SR_128 = 1, SR_250, SR_490, SR_920,
+				             SR_1600, SR_2400, SR_3300 };
+
+  const SAMPLE_RATE rate( void ) const noexcept;
+  const SAMPLE_RATE rate( const SAMPLE_RATE r );
+  
+  const int i_rate( void ) const noexcept; // Alternative to using an enum
+  const int i_rate( const int r );
+  
+  // Set/get the comparator mode, polarity, latch, and queue.
+
+  enum class COMP_MODE : int { TRADITIONAL = 1, WINDOW };
+
+  const COMP_MODE comp_mode( void ) const noexcept;
+  const COMP_MODE comp_mode( const COMP_MODE m );
+
+  enum class COMP_POL :int { ACTIVE_LOW = 1, ACTIVE_HIGH };
+
+  const COMP_POL comp_pol( void ) const noexcept;
+  const COMP_POL comp_pol( const COMP_POL p );
+
+  enum class COMP_LAT : int { NON_LATCHING = 1, LATCHING };
+
+  const COMP_LAT comp_lat( void ) const noexcept;
+  const COMP_LAT comp_lat( const COMP_LAT l );
+
+  enum class COMP_QUE : int { ONE = 1, TWO, FOUR, DISABLE };
+
+  const COMP_QUE comp_que( void ) const noexcept;
+  const COMP_QUE comp_que( const COMP_QUE q );
+  
+  // Get a signed floating point value of a conversion register. How
+  // the analog inputs are connected are unknown. Therefore, both
+  // differential and single input multiplex inputs are
+  // supported. That said, often in I/IoT the inputs are single ended.
     
-    enum class CREG { DIFF01, // Differential between AIN0 and AIN1
-		      DIFF03, // Differential between AIN0 and AIN3
-		      DIFF13, // Differential between AIN1 and AIN3
-		      DIFF23, // Differential between AIN2 and AIN3
-		      CHAN0,  // Single ended, AIN0 (aka "Channel 0")
-                      CHAN1,  // Single ended, AIN1 (aka "Channel 1")
-		      CHAN2,  // Single ended, AIN2 (aka "Channel 2")
-		      CHAN3   // Single ended, AIN3 (aka "Channel 3")
-    };
-
-    const float operator[]( const CREG& r );
-
+  enum class CREG { DIFF01, // Differential between AIN0 and AIN1
+		    DIFF03, // Differential between AIN0 and AIN3
+		    DIFF13, // Differential between AIN1 and AIN3
+		    DIFF23, // Differential between AIN2 and AIN3
+		    CHAN0,  // Single ended, AIN0 (aka "Channel 0")
+		    CHAN1,  // Single ended, AIN1 (aka "Channel 1")
+		    CHAN2,  // Single ended, AIN2 (aka "Channel 2")
+		    CHAN3   // Single ended, AIN3 (aka "Channel 3")
   };
   
+  const float operator[]( const CREG& r );
+
+private:
+
+  enum class OS_x : int {
+    _NONE = -1, _MASK = -2,
+               BEGIN = int( OS::BEGIN ),
+    CONVERSION_READY = int( OS::CONVERSION_READY )
+  };
+  inline static const std::map< OS_x, uint16_t > OS_MAP {
+    { OS_x::BEGIN,                   0b1000000000000000 },
+    { OS_x::CONVERSION_READY,        0b1000000000000000 },
+    { OS_x::_MASK,                   0b1000000000000000 }
+  };
+
+  enum class PGA_GAIN_x : int {
+    _NONE = -1, _MASK = -2,
+    FS_6144 = int( PGA_GAIN::FS_6144 ),
+    FS_4096 = int( PGA_GAIN::FS_4096 ),
+    FS_2048 = int( PGA_GAIN::FS_2048 ),
+    FS_1024 = int( PGA_GAIN::FS_1024 ),
+    FS_512  = int( PGA_GAIN::FS_512  ),
+    FS_256  = int( PGA_GAIN::FS_256  )
+  };
+  inline static const std::map< PGA_GAIN_x, uint16_t > PGA_GAIN_MAP {
+    { PGA_GAIN_x::FS_6144,          0b0000000000000000 },
+    { PGA_GAIN_x::FS_4096,          0b0000001000000000 },
+    { PGA_GAIN_x::FS_2048,          0b0000010000000000 }, /* DEFAULT */
+    { PGA_GAIN_x::FS_1024,          0b0000011000000000 },
+    { PGA_GAIN_x::FS_512,           0b0000100000000000 },
+    { PGA_GAIN_x::FS_256,           0b0000101000000000 },
+    { PGA_GAIN_x::_MASK,            0b0000111000000000 }
+  };
   
-}  
+  enum class MODE_x : int {
+    _NONE = -1, _MASK = -2,
+     CONTINUOUS = int( MODE::CONTINUOUS  ),
+    SINGLE_SHOT = int( MODE::SINGLE_SHOT )
+  };
+  inline static const std::map< MODE_x, uint16_t > MODE_MAP {
+    { MODE_x::CONTINUOUS,           0b0000000000000000 },
+    { MODE_x::SINGLE_SHOT,          0b0000000100000000 }, /* DEFAULT */
+    { MODE_x::_MASK,                0b0000000100000000 }
+  };
 
-// Helpful output operators.
+  enum class SAMPLE_RATE_x : int {
+    _NONE = -1, _MASK = -2,
+     SR_128 = int( SAMPLE_RATE::SR_128  ),
+     SR_250 = int( SAMPLE_RATE::SR_250  ),
+     SR_490 = int( SAMPLE_RATE::SR_490  ),
+     SR_920 = int( SAMPLE_RATE::SR_920  ),
+    SR_1600 = int( SAMPLE_RATE::SR_1600 ),
+    SR_2400 = int( SAMPLE_RATE::SR_2400 ),
+    SR_3300 = int( SAMPLE_RATE::SR_3300 )
+  };
+  inline static const std::map< SAMPLE_RATE_x, uint16_t > SAMPLE_RATE_MAP {
+    { SAMPLE_RATE_x::SR_128,        0b0000000000000000 },
+    { SAMPLE_RATE_x::SR_250,        0b0000000000100000 },
+    { SAMPLE_RATE_x::SR_490,        0b0000000001000000 },
+    { SAMPLE_RATE_x::SR_920,        0b0000000001100000 },
+    { SAMPLE_RATE_x::SR_1600,       0b0000000010000000 }, /* DEFAULT */
+    { SAMPLE_RATE_x::SR_2400,       0b0000000010100000 },
+    { SAMPLE_RATE_x::SR_3300,       0b0000000011000000 },
+    { SAMPLE_RATE_x::_MASK,         0b0000000011100000 }
+  };
 
-std::ostream& operator<<( std::ostream& os, i2c::ads1015::OS o );
-std::ostream& operator<<( std::ostream& os, i2c::ads1015::PGA_GAIN g );
-std::ostream& operator<<( std::ostream& os, i2c::ads1015::MODE m );
-std::ostream& operator<<( std::ostream& os, i2c::ads1015::SAMPLE_RATE r );
-std::ostream& operator<<( std::ostream& os, i2c::ads1015::COMP_MODE m );
-std::ostream& operator<<( std::ostream& os, i2c::ads1015::COMP_POL p );
-std::ostream& operator<<( std::ostream& os, i2c::ads1015::COMP_LAT l );
-std::ostream& operator<<( std::ostream& os, i2c::ads1015::COMP_QUE q );
+  enum class COMP_MODE_x : int {
+    _NONE = -1, _MASK = -2,
+    TRADITIONAL = int( COMP_MODE::TRADITIONAL ),
+         WINDOW = int( COMP_MODE::WINDOW      )
+  };
+  inline static const std::map< COMP_MODE_x, uint16_t > COMP_MODE_MAP {
+    { COMP_MODE_x::TRADITIONAL,     0b0000000000000000 }, /* DEFAULT */
+    { COMP_MODE_x::WINDOW,          0b0000000000010000 },
+    { COMP_MODE_x::_MASK,           0b0000000000010000 }
+  };
 
+  enum class COMP_POL_x :int {
+    _NONE = -1, _MASK = -2,
+    ACTIVE_LOW = int( ads1015::COMP_POL::ACTIVE_LOW  ),
+    ACTIVE_HIGH = int( ads1015::COMP_POL::ACTIVE_HIGH )
+  };
+  inline static const std::map< COMP_POL_x, uint16_t > COMP_POL_MAP {
+    { COMP_POL_x::ACTIVE_LOW,       0b0000000000000000 }, /* DEFAULT */
+    { COMP_POL_x::ACTIVE_HIGH,      0b0000000000001000 },
+    { COMP_POL_x::_MASK,            0b0000000000001000 }
+  };
+
+  enum class COMP_LAT_x : int {
+    _NONE = -1, _MASK = -2,
+    NON_LATCHING = int( COMP_LAT::NON_LATCHING ),
+        LATCHING = int( COMP_LAT::LATCHING     )
+  };
+  inline static const std::map< COMP_LAT_x, uint16_t > COMP_LAT_MAP {
+    { COMP_LAT_x::NON_LATCHING,     0b0000000000000000 }, /* DEFAULT */
+    { COMP_LAT_x::LATCHING,         0b0000000000000100 },
+    { COMP_LAT_x::_MASK,            0b0000000000000100 }
+  };
+
+  enum class COMP_QUE_x : int {
+    _NONE = -1, _MASK = -2,
+         ONE = int( COMP_QUE::ONE     ),
+         TWO = int( COMP_QUE::TWO     ),
+        FOUR = int( COMP_QUE::FOUR    ),
+    DISABLE  = int( COMP_QUE::DISABLE )
+  };
+  inline static const std::map< COMP_QUE_x, uint16_t > COMP_QUE_MAP {
+    { COMP_QUE_x::ONE,               0b0000000000000000 },
+    { COMP_QUE_x::TWO,               0b0000000000000001 },
+    { COMP_QUE_x::FOUR,              0b0000000000000010 },
+    { COMP_QUE_x::DISABLE,           0b0000000000000011 }, /* DEFAULT */
+    { COMP_QUE_x::_MASK,             0b0000000000000011 }
+  };
+ 
+  enum class AINp_x : int {
+    _NONE = -1, _MASK = -2,
+    AIN0 = 1, AIN1, AIN2, AIN3
+  };
+  enum class AINn_x : int {
+    _NONE = -1, _MASK = -2,
+    AIN1 = 1, AIN3, GND
+  };
+  inline static const
+  std::map< std::tuple< AINp_x, AINn_x >, uint16_t > MUX_MAP {
+    { { AINp_x::AIN0,  AINn_x::AIN1  }, 0b0000000000000000 }, /* DEFAULT */
+    { { AINp_x::AIN0,  AINn_x::AIN3  }, 0b0001000000000000 },
+    { { AINp_x::AIN1,  AINn_x::AIN3  }, 0b0010000000000000 },
+    { { AINp_x::AIN2,  AINn_x::AIN3  }, 0b0011000000000000 },
+    { { AINp_x::AIN0,  AINn_x::GND   }, 0b0100000000000000 },
+    { { AINp_x::AIN1,  AINn_x::GND   }, 0b0101000000000000 },
+    { { AINp_x::AIN2,  AINn_x::GND   }, 0b0110000000000000 },
+    { { AINp_x::AIN3,  AINn_x::GND   }, 0b0111000000000000 },
+    { { AINp_x::_MASK, AINn_x::_MASK }, 0b0111000000000000 }
+  };
+
+  inline static const std::map< PGA_GAIN_x, int > gain_xlate_f {
+    { PGA_GAIN_x::FS_6144, 6144 },
+    { PGA_GAIN_x::FS_4096, 4096 },
+    { PGA_GAIN_x::FS_2048, 2048 },
+    { PGA_GAIN_x::FS_1024, 1024 },
+    { PGA_GAIN_x::FS_512,   512 },
+    { PGA_GAIN_x::FS_256,   256 }
+  };
+  inline static const std::map< int, PGA_GAIN_x > gain_xlate_r {
+    { 6144, PGA_GAIN_x::FS_6144 },
+    { 4096, PGA_GAIN_x::FS_4096 },
+    { 2048, PGA_GAIN_x::FS_2048 },
+    { 1024, PGA_GAIN_x::FS_1024 },
+    {  512, PGA_GAIN_x::FS_512  },
+    {  256, PGA_GAIN_x::FS_256  }
+  };
+
+  inline static const std::map< SAMPLE_RATE_x, int > rate_xlate_f {
+    { SAMPLE_RATE_x::SR_128,   128 },
+    { SAMPLE_RATE_x::SR_250,   250 },
+    { SAMPLE_RATE_x::SR_490,   490 },
+    { SAMPLE_RATE_x::SR_920,   920 },
+    { SAMPLE_RATE_x::SR_1600, 1600 },
+    { SAMPLE_RATE_x::SR_2400, 2400 },
+    { SAMPLE_RATE_x::SR_3300, 3300 }
+  };
+  inline static const std::map< int, SAMPLE_RATE_x > rate_xlate_r {
+    {  128, SAMPLE_RATE_x::SR_128  },
+    {  250, SAMPLE_RATE_x::SR_250  },
+    {  490, SAMPLE_RATE_x::SR_490  },
+    {  920, SAMPLE_RATE_x::SR_920  },
+    { 1600, SAMPLE_RATE_x::SR_1600 },
+    { 2400, SAMPLE_RATE_x::SR_2400 },
+    { 3300, SAMPLE_RATE_x::SR_3300 }
+  };
+
+  // Set/get the multiplexer. The multiplexer is used to select which
+  // A/D value is read.
+
+  const std::tuple< AINp_x, AINn_x > _mux( void ) const noexcept;
+  const std::tuple< AINp_x, AINn_x > _mux( AINp_x p, AINn_x n );
+
+  // Helpful output operators.
+  
+  friend std::ostream& operator<<( std::ostream& os, OS o );
+  friend std::ostream& operator<<( std::ostream& os, PGA_GAIN g );
+  friend std::ostream& operator<<( std::ostream& os, MODE m );
+  friend std::ostream& operator<<( std::ostream& os, SAMPLE_RATE r );
+  friend std::ostream& operator<<( std::ostream& os, COMP_MODE m );
+  friend std::ostream& operator<<( std::ostream& os, COMP_POL p );
+  friend std::ostream& operator<<( std::ostream& os, COMP_LAT l );
+  friend std::ostream& operator<<( std::ostream& os, COMP_QUE q );
+  friend std::ostream& operator<<( std::ostream&,
+				   const std::tuple< AINp_x, AINn_x >& );
+
+};
+
+
+std::ostream& operator<<( std::ostream& os, ads1015::OS o );
+std::ostream& operator<<( std::ostream& os, ads1015::PGA_GAIN g );
+std::ostream& operator<<( std::ostream& os, ads1015::MODE m );
+std::ostream& operator<<( std::ostream& os, ads1015::SAMPLE_RATE r );
+std::ostream& operator<<( std::ostream& os, ads1015::COMP_MODE m );
+std::ostream& operator<<( std::ostream& os, ads1015::COMP_POL p );
+std::ostream& operator<<( std::ostream& os, ads1015::COMP_LAT l );
+std::ostream& operator<<( std::ostream& os, ads1015::COMP_QUE q );
 std::ostream& operator<<( std::ostream& os,
-			  std::tuple< i2c::ads1015::AINp,
-			              i2c::ads1015::AINn >& m );
+                          const std::tuple< ads1015::AINp_x,
+			                    ads1015::AINn_x >& m );
 
 
 #endif

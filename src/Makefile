@@ -22,6 +22,12 @@
 #
 #
 # $Log: Makefile,v $
+# Revision 1.11  2019/10/23 03:54:00  root
+# First pass at integrating other project changes.
+#
+# Revision 1.10  2019/10/12 22:01:50  root
+# *** empty log message ***
+#
 # Revision 1.9  2019/10/08 23:55:26  root
 # Changed install flags.
 #
@@ -66,7 +72,7 @@ LIBS=
 CXX=       c++
 CXXFLAGS=  ${OPTS} ${DBG} ${INCLUDES} -pthread
 
-SRCS=    dev.cc ads1015.cc si7021.cc is31fl3730.cc \
+SRCS=    i2c.o ads1015.cc si7021.cc is31fl3730.cc \
 		microdotphat.cc main.cc log.cc opts.cc util.cc
 OBJS=    $(patsubst %.cc, %.o, ${SRCS})
 PLUGINS= th.sh mq.sh rh.sh
@@ -107,9 +113,9 @@ clean:
 
 ${OBJS}: Makefile
 
-install: a.out $(PLUGINS)
+install: a.out $(foreach p, $(PLUGINS), scripts/$p)
 	-mkdir -p /etc/munin/pluguns
-	$(foreach p, $(PLUGINS), cp $p /etc/munin/pluguns;)
+	$(foreach p, $(PLUGINS), cp scripts/$p /etc/munin/pluguns;)
 	$(foreach p, $(PLUGINS), chmod 755 /etc/munin/pluguns/$p;)
 	-mkdir -p /usr/local/sbin
 	install -m 755 -s a.out /usr/local/sbin/attic-sensors

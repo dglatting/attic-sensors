@@ -176,7 +176,7 @@ extern "C" {
 
 extern const
 std::vector< std::string > opts_ident {
-  _OPT_H_ID, "$Id: opts.cc,v 1.26 2019/10/07 03:42:36 root Exp root $"
+  _OPT_H_ID, "$Id: opts.cc,v 1.26 2019/10/07 03:42:36 root Exp $"
 };
 
 

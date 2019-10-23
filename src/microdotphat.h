@@ -39,6 +39,9 @@
  *
  *
  * $Log: microdotphat.h,v $
+ * Revision 1.11  2019/10/23 03:54:00  root
+ * First pass at integrating other project changes.
+ *
  * Revision 1.10  2019/09/29 03:56:17  root
  * Various syntax and text updates.
  *
@@ -98,7 +101,7 @@ extern "C" {
 #include "util.h"
 
 
-#define _MICRODOTPHAT_H_ID "$Id: microdotphat.h,v 1.10 2019/09/29 03:56:17 root Exp $"
+#define _MICRODOTPHAT_H_ID "$Id: microdotphat.h,v 1.11 2019/10/23 03:54:00 root Exp root $"
 
 
 class MicroDotpHAT;
@@ -152,7 +155,7 @@ private:
 
   // The left, middle, and right display pairs.
   
-  std::shared_ptr< i2c::is31fl3730 > myLeft, myMiddle, myRight;
+  std::shared_ptr< is31fl3730 > myLeft, myMiddle, myRight;
 
   // Whether to mirror (i.e., flip left/right) and/or rotate (i.e.,
   // flip top/bottom) the display.
@@ -329,8 +332,8 @@ private:
 
   const POS _calc_positions( const int x, const int y ) const noexcept;
 
-  i2c::is31fl3730* _choose_display( const POS& ) const noexcept; 
-  i2c::is31fl3730::MATRIX_REG _choose_matrix( const POS& ) const noexcept;
+  is31fl3730* _choose_display( const POS& ) const noexcept; 
+  is31fl3730::MATRIX_REG _choose_matrix( const POS& ) const noexcept;
 
   // The bit mask is the traditional shifting of 0x01 from the right
   // to the left however col/row may be more specific to a matrix.

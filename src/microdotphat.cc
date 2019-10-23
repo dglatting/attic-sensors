@@ -25,6 +25,9 @@
  *
  *
  * $Log: microdotphat.cc,v $
+ * Revision 1.10  2019/10/23 03:54:00  root
+ * First pass at integrating other project changes.
+ *
  * Revision 1.9  2019/09/29 03:56:17  root
  * Various syntax and text updates.
  *
@@ -87,7 +90,7 @@ extern "C" {
 
 
 extern const std::vector< std::string > microdotphat_ident {
-  _MICRODOTPHAT_H_ID, "$Id: microdotphat.cc,v 1.9 2019/09/29 03:56:17 root Exp $"
+  _MICRODOTPHAT_H_ID, "$Id: microdotphat.cc,v 1.10 2019/10/23 03:54:00 root Exp root $"
 };
 
 
@@ -97,9 +100,9 @@ static const std::vector< uint8_t > zero {
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
-static constexpr i2c::is31fl3730::MATRIX_REG
-  m1 = i2c::is31fl3730::MATRIX_REG::MATRIX1,
-  m2 = i2c::is31fl3730::MATRIX_REG::MATRIX2;
+static constexpr is31fl3730::MATRIX_REG
+  m1 = is31fl3730::MATRIX_REG::MATRIX1,
+  m2 = is31fl3730::MATRIX_REG::MATRIX2;
 
 // Lifted from Pimoroni. The following is a copy of their license on
 // github.
@@ -264,9 +267,9 @@ static const std::map< const u_int,
 
 
 MicroDotpHAT::MicroDotpHAT( void )
-  : myLeft(   new i2c::is31fl3730( DISPLAY_LEFT_ADDR   )),
-    myMiddle( new i2c::is31fl3730( DISPLAY_MIDDLE_ADDR )),
-    myRight(  new i2c::is31fl3730( DISPLAY_RIGHT_ADDR  )),
+  : myLeft(   new is31fl3730( DISPLAY_LEFT_ADDR   )),
+    myMiddle( new is31fl3730( DISPLAY_MIDDLE_ADDR )),
+    myRight(  new is31fl3730( DISPLAY_RIGHT_ADDR  )),
     myMirror( false ), myRotate( false ) {
 
   _doInit();
@@ -318,11 +321,11 @@ MicroDotpHAT::_doInit( void ) noexcept {
   for( auto& i : { myLeft.get(), myMiddle.get(), myRight.get() }) {
     
     i->pwm(          127                                 );
-    i->row_current(  i2c::is31fl3730::ROW_CURRENT::mA_35 );
-    i->display_mode( i2c::is31fl3730::DISPLAY::BOTH      );
-    i->matrix_mode(  i2c::is31fl3730::MATRIX::ADM_8x8    );
+    i->row_current(  is31fl3730::ROW_CURRENT::mA_35 );
+    i->display_mode( is31fl3730::DISPLAY::BOTH      );
+    i->matrix_mode(  is31fl3730::MATRIX::ADM_8x8    );
     i->audio_enable( false                               );
-    i->audio_gain(   i2c::is31fl3730::AUDIO_GAIN::dB_0   );
+    i->audio_gain(   is31fl3730::AUDIO_GAIN::dB_0   );
 
     i->matrix( m1 ) = zero;
     i->matrix( m2 ) = zero;
@@ -543,8 +546,8 @@ inline
 bool
 MicroDotpHAT::_get_pixel_m2( int x, int y ) const noexcept {
 
-  const POS              p = _calc_positions( x, y );
-        i2c::is31fl3730* d = _choose_display( p );
+  const POS         p = _calc_positions( x, y );
+        is31fl3730* d = _choose_display( p );
 
   return ( d->matrix( m2 )[ POS_X(p)] & _bit_col( POS_Y(p)));
 }
@@ -554,8 +557,8 @@ inline
 bool
 MicroDotpHAT::_set_pixel_m2( int x, int y, bool on_off ) noexcept {
 
-  const POS              p = _calc_positions( x, y );
-        i2c::is31fl3730* d = _choose_display( p );
+  const POS         p = _calc_positions( x, y );
+        is31fl3730* d = _choose_display( p );
 
   const uint8_t bit = _bit_col( POS_Y(p));
 
@@ -571,8 +574,8 @@ inline
 bool
 MicroDotpHAT::_get_pixel_m1( int x, int y ) const noexcept {
 
-  const POS              p = _calc_positions( x, y );
-        i2c::is31fl3730* d = _choose_display( p );
+  const POS         p = _calc_positions( x, y );
+        is31fl3730* d = _choose_display( p );
 
   return ( d->matrix( m1 )[ POS_Y(p)] & _bit_col( POS_X(p)));
 }
@@ -582,8 +585,8 @@ inline
 bool
 MicroDotpHAT::_set_pixel_m1( int x, int y, bool on_off ) noexcept {
 
-  const POS              p = _calc_positions( x, y );
-        i2c::is31fl3730* d = _choose_display( p );
+  const POS         p = _calc_positions( x, y );
+        is31fl3730* d = _choose_display( p );
 
   const uint8_t bit = _bit_col( POS_X(p));
 
@@ -631,9 +634,9 @@ MicroDotpHAT::_set_decimal_m2( int digit, bool on_off ) noexcept {
 
   assert( digit < num_digits());
 
-  const int              x = digit * num_cols_per_digit();
-  const POS              p = _calc_positions( x, 0 );
-        i2c::is31fl3730* d = _choose_display( p );
+  const int         x = digit * num_cols_per_digit();
+  const POS         p = _calc_positions( x, 0 );
+        is31fl3730* d = _choose_display( p );
 
   d->matrix( m2 )[ 7 ] &= ~0x40;
   if( on_off )
@@ -649,9 +652,9 @@ MicroDotpHAT::_get_decimal_m2( int digit ) const noexcept {
 
   assert( digit < num_digits());
 
-  const int              x = digit * num_cols_per_digit();
-  const POS              p = _calc_positions( x, 0 );
-        i2c::is31fl3730* d = _choose_display( p );
+  const int         x = digit * num_cols_per_digit();
+  const POS         p = _calc_positions( x, 0 );
+        is31fl3730* d = _choose_display( p );
 
   return ( d->matrix( m2 )[ 7 ] & 0x40 );
 }
@@ -663,9 +666,9 @@ MicroDotpHAT::_set_decimal_m1( int digit, bool on_off ) noexcept {
 
   assert( digit < num_digits());
 
-  const int              x = digit * num_cols_per_digit();
-  const POS              p = _calc_positions( x, 0 );
-        i2c::is31fl3730* d = _choose_display( p );
+  const int         x = digit * num_cols_per_digit();
+  const POS         p = _calc_positions( x, 0 );
+        is31fl3730* d = _choose_display( p );
 
   d->matrix( m1 )[ 6 ] &= ~0x80;
   if( on_off )
@@ -681,9 +684,9 @@ MicroDotpHAT::_get_decimal_m1( int digit ) const noexcept {
 
   assert( digit < num_digits());
 
-  const int              x = digit * num_cols_per_digit();
-  const POS              p = _calc_positions( x, 0 );
-        i2c::is31fl3730* d = _choose_display( p );
+  const int         x = digit * num_cols_per_digit();
+  const POS         p = _calc_positions( x, 0 );
+        is31fl3730* d = _choose_display( p );
 
   return ( d->matrix( m1 )[ 6 ] & 0x80 );
 }
@@ -825,7 +828,7 @@ MicroDotpHAT::_calc_positions( const int x, const int y ) const noexcept {
 
 
 inline
-i2c::is31fl3730*
+is31fl3730*
 MicroDotpHAT::_choose_display( const POS& p ) const noexcept {
 
   if( POS_ARRAY( p ) == 0 )
@@ -844,7 +847,7 @@ MicroDotpHAT::_choose_display( const POS& p ) const noexcept {
 
 
 inline
-i2c::is31fl3730::MATRIX_REG
+is31fl3730::MATRIX_REG
 MicroDotpHAT::_choose_matrix( const POS& p ) const noexcept {
 
   if( POS_MATRIX( p )) 

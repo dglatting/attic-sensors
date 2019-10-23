@@ -31,6 +31,9 @@
  *
  *
  * $Log: util.h,v $
+ * Revision 1.37  2019/10/19 01:07:19  root
+ * Fixed minor formatting bug.
+ *
  * Revision 1.36  2019/10/07 03:42:36  root
  * Shortened the function quoteStr().
  *
@@ -182,7 +185,7 @@ extern "C" {
 #include "opts.h"
 
 
-#define _UTIL_H_ID "$Id: util.h,v 1.36 2019/10/07 03:42:36 root Exp root $"
+#define _UTIL_H_ID "$Id: util.h,v 1.37 2019/10/19 01:07:19 root Exp $"
 
 
 // Make modulo math work the way I want it to work.
@@ -334,6 +337,12 @@ const std::string paren( const u_long );
 
 const std::string paren( const char* );
 const std::string paren( const std::string& );
+
+
+// Template used to create a std::unique_ptr<> with a custom deleter
+
+template< typename T >
+using deleted_unique_ptr = std::unique_ptr< T, std::function<void(T*)>>;
 
 
 #endif
